@@ -1,0 +1,17 @@
+{
+  "name": "dic-ko-lang",
+  "version": "1.0.0",
+  "description": "Korean Dictionary API search tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "update-meanings": "node update_korean_meanings.js"
+  },
+  "keywords": ["korean", "dictionary", "api"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}
+
