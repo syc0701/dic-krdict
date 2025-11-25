@@ -290,68 +290,84 @@ async function getWordsFromDatabase(lastId = null) {
 
 // Process words and update Korean meanings
 async function processWords() {
+  let totalSuccessCount = 0;
+  let totalFailCount = 0;
+  let batchNumber = 0;
+
   try {
-    const lastId = getLastProcessedId();
-    console.log(`Fetching words from database${lastId ? ` (after ID: ${lastId})` : ''}...`);
-    
-    const words = await getWordsFromDatabase(lastId);
-    console.log(`Found ${words.length} words to process\n`);
+    while (true) {
+      batchNumber++;
+      const lastId = getLastProcessedId();
+      console.log(`\n=== Batch ${batchNumber} ===`);
+      console.log(`Fetching words from database${lastId ? ` (after ID: ${lastId})` : ''}...`);
+      
+      const words = await getWordsFromDatabase(lastId);
+      console.log(`Found ${words.length} words to process\n`);
 
-    if (words.length === 0) {
-      console.log('No words to process.');
-      return;
-    }
-
-    let successCount = 0;
-    let failCount = 0;
-    let lastProcessedId = null;
-
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      console.log(`[${i + 1}/${words.length}] Processing: "${word.word}" (ID: ${word.id})`);
-
-      try {
-        const koreanMeaning = await findKoreanMeaningForEnglishWord(word.word);
-
-        if (koreanMeaning) {
-          // Structure the Korean meaning as JSONB
-          const meaningKo = {
-            word: koreanMeaning.korean_word,
-            definitions: koreanMeaning.korean_definitions,
-            part_of_speech: koreanMeaning.part_of_speech,
-            target_code: koreanMeaning.target_code,
-            source: 'krdict',
-            updated_at: new Date().toISOString()
-          };
-
-          await db.updateKoreanMeaning(word.id, word.language, meaningKo);
-          console.log(`  ✓ Updated: ${koreanMeaning.korean_word} - ${koreanMeaning.korean_definitions[0]?.substring(0, 50)}...`);
-          successCount++;
-        } else {
-          console.log(`  ✗ No Korean meaning found for "${word.word}"`);
-          failCount++;
-        }
-
-        // Save the last processed ID
-        lastProcessedId = word.id;
-        saveLastProcessedId(lastProcessedId);
-
-        // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (error) {
-        console.error(`  ✗ Error processing "${word.word}": ${error.message}`);
-        failCount++;
-        // Still save the ID even if there was an error
-        lastProcessedId = word.id;
-        saveLastProcessedId(lastProcessedId);
+      if (words.length === 0) {
+        console.log('No more words to process. All done!');
+        break;
       }
+
+      let successCount = 0;
+      let failCount = 0;
+      let lastProcessedId = null;
+
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        console.log(`[${i + 1}/${words.length}] Processing: "${word.word}" (ID: ${word.id})`);
+
+        try {
+          const koreanMeaning = await findKoreanMeaningForEnglishWord(word.word);
+
+          if (koreanMeaning) {
+            // Structure the Korean meaning as JSONB
+            const meaningKo = {
+              word: koreanMeaning.korean_word,
+              definitions: koreanMeaning.korean_definitions,
+              part_of_speech: koreanMeaning.part_of_speech,
+              target_code: koreanMeaning.target_code,
+              source: 'krdict',
+              updated_at: new Date().toISOString()
+            };
+
+            await db.updateKoreanMeaning(word.id, word.language, meaningKo);
+            console.log(`  ✓ Updated: ${koreanMeaning.korean_word} - ${koreanMeaning.korean_definitions[0]?.substring(0, 50)}...`);
+            successCount++;
+          } else {
+            console.log(`  ✗ No Korean meaning found for "${word.word}"`);
+            failCount++;
+          }
+
+          // Save the last processed ID
+          lastProcessedId = word.id;
+          saveLastProcessedId(lastProcessedId);
+
+          // Add a small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`  ✗ Error processing "${word.word}": ${error.message}`);
+          failCount++;
+          // Still save the ID even if there was an error
+          lastProcessedId = word.id;
+          saveLastProcessedId(lastProcessedId);
+        }
+      }
+
+      totalSuccessCount += successCount;
+      totalFailCount += failCount;
+
+      console.log(`\n=== Batch ${batchNumber} Summary ===`);
+      console.log(`Total processed: ${words.length}`);
+      console.log(`Success: ${successCount}`);
+      console.log(`Failed: ${failCount}`);
+      console.log(`Last processed ID: ${lastProcessedId}`);
     }
 
-    console.log(`\n=== Summary ===`);
-    console.log(`Total processed: ${words.length}`);
-    console.log(`Success: ${successCount}`);
-    console.log(`Failed: ${failCount}`);
-    console.log(`Last processed ID: ${lastProcessedId}`);
+    console.log(`\n=== Final Summary ===`);
+    console.log(`Total batches: ${batchNumber - 1}`);
+    console.log(`Total success: ${totalSuccessCount}`);
+    console.log(`Total failed: ${totalFailCount}`);
 
   } catch (error) {
     console.error('Error processing words:', error);
