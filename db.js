@@ -37,10 +37,10 @@ async function query(text, params) {
 }
 
 // Get all words that need Korean meanings
-async function getWordsWithoutKoreanMeaning(language = 'en') {
+async function getWordsWithoutKoreanMeaning(language = 'english') {
   const queryText = `
     SELECT id, word, language 
-    FROM dictionary_multi 
+    FROM dictionary
     WHERE language = $1 
       AND (meaning_ko IS NULL OR meaning_ko = 'null'::jsonb)
       AND word IS NOT NULL
@@ -54,7 +54,7 @@ async function getWordsWithoutKoreanMeaning(language = 'en') {
 // Update Korean meaning for a word
 async function updateKoreanMeaning(id, language, meaningKo) {
   const queryText = `
-    UPDATE dictionary_multi 
+    UPDATE dictionary 
     SET meaning_ko = $1::jsonb, updated_at = NOW()
     WHERE id = $2 AND language = $3
   `;

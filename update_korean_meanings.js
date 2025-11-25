@@ -122,11 +122,28 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
     const results = await searchKoreanDict(englishWord);
     if (results && results.length > 0) {
       // Check if any result has the English word in translations
+      // Try exact match first
       for (const result of results) {
         const hasMatchingTranslation = result.english_translations.some(
           trans => trans.word.toLowerCase() === normalizedEnglishWord
         );
         if (hasMatchingTranslation) {
+          return {
+            korean_word: result.word,
+            korean_definitions: result.korean_definitions,
+            part_of_speech: result.part_of_speech,
+            target_code: result.target_code,
+            english_translations: result.english_translations
+          };
+        }
+      }
+      // If no exact match, try partial match (word appears in translation)
+      for (const result of results) {
+        const hasPartialMatch = result.english_translations.some(
+          trans => trans.word.toLowerCase().includes(normalizedEnglishWord) ||
+                   normalizedEnglishWord.includes(trans.word.toLowerCase())
+        );
+        if (hasPartialMatch) {
           return {
             korean_word: result.word,
             korean_definitions: result.korean_definitions,
@@ -145,7 +162,8 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
   // This is a limited approach - for production, you'd want to use a translation service
   // to convert English -> Korean first, then search
   
-  // Common English-to-Korean mappings for testing
+  // Common English-to-Korean mappings
+  // Note: Some words may have multiple Korean translations - this uses the most common one
   const commonMappings = {
     'english': '영어',
     'korean': '한국어',
@@ -156,7 +174,12 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
     'tree': '나무',
     'friend': '친구',
     'love': '사랑',
-    'food': '음식'
+    'food': '음식',
+    'give': '주다',
+    'own': '소유하다',
+    'strainer': '체',
+    'aromatic': '향기로운',
+    'reckoning': '계산'
   };
 
   const koreanWord = commonMappings[normalizedEnglishWord];
@@ -164,7 +187,7 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
     try {
       const results = await searchKoreanDict(koreanWord);
       if (results && results.length > 0) {
-        // Verify the translation matches
+        // Verify the translation matches - try exact match first
         for (const result of results) {
           const hasMatchingTranslation = result.english_translations.some(
             trans => trans.word.toLowerCase() === normalizedEnglishWord
@@ -178,6 +201,32 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
               english_translations: result.english_translations
             };
           }
+        }
+        // If no exact match, try partial match
+        for (const result of results) {
+          const hasPartialMatch = result.english_translations.some(
+            trans => trans.word.toLowerCase().includes(normalizedEnglishWord) ||
+                     normalizedEnglishWord.includes(trans.word.toLowerCase())
+          );
+          if (hasPartialMatch) {
+            return {
+              korean_word: result.word,
+              korean_definitions: result.korean_definitions,
+              part_of_speech: result.part_of_speech,
+              target_code: result.target_code,
+              english_translations: result.english_translations
+            };
+          }
+        }
+        // If still no match but we have results, return the first one (might be a close match)
+        if (results.length > 0) {
+          return {
+            korean_word: results[0].word,
+            korean_definitions: results[0].korean_definitions,
+            part_of_speech: results[0].part_of_speech,
+            target_code: results[0].target_code,
+            english_translations: results[0].english_translations
+          };
         }
       }
     } catch (error) {
@@ -193,7 +242,7 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
 async function processWords() {
   try {
     console.log('Fetching words from database...');
-    const words = await db.getWordsWithoutKoreanMeaning('en');
+    const words = await db.getWordsWithoutKoreanMeaning('english');
     console.log(`Found ${words.length} words to process\n`);
 
     if (words.length === 0) {

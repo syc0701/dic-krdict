@@ -149,11 +149,27 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
   try {
     const results = await searchKoreanDict(englishWord);
     if (results && results.length > 0) {
+      // Try exact match first
       for (const result of results) {
         const hasMatchingTranslation = result.english_translations.some(
           trans => trans.word.toLowerCase() === normalizedEnglishWord
         );
         if (hasMatchingTranslation) {
+          return {
+            korean_word: result.word,
+            korean_definitions: result.korean_definitions,
+            part_of_speech: result.part_of_speech,
+            target_code: result.target_code
+          };
+        }
+      }
+      // If no exact match, try partial match
+      for (const result of results) {
+        const hasPartialMatch = result.english_translations.some(
+          trans => trans.word.toLowerCase().includes(normalizedEnglishWord) ||
+                   normalizedEnglishWord.includes(trans.word.toLowerCase())
+        );
+        if (hasPartialMatch) {
           return {
             korean_word: result.word,
             korean_definitions: result.korean_definitions,
@@ -178,7 +194,12 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
     'tree': '나무',
     'friend': '친구',
     'love': '사랑',
-    'food': '음식'
+    'food': '음식',
+    'give': '주다',
+    'own': '소유하다',
+    'strainer': '체',
+    'aromatic': '향기로운',
+    'reckoning': '계산'
   };
 
   const koreanWord = commonMappings[normalizedEnglishWord];
@@ -186,6 +207,7 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
     try {
       const results = await searchKoreanDict(koreanWord);
       if (results && results.length > 0) {
+        // Try exact match first
         for (const result of results) {
           const hasMatchingTranslation = result.english_translations.some(
             trans => trans.word.toLowerCase() === normalizedEnglishWord
@@ -199,6 +221,30 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
             };
           }
         }
+        // If no exact match, try partial match
+        for (const result of results) {
+          const hasPartialMatch = result.english_translations.some(
+            trans => trans.word.toLowerCase().includes(normalizedEnglishWord) ||
+                     normalizedEnglishWord.includes(trans.word.toLowerCase())
+          );
+          if (hasPartialMatch) {
+            return {
+              korean_word: result.word,
+              korean_definitions: result.korean_definitions,
+              part_of_speech: result.part_of_speech,
+              target_code: result.target_code
+            };
+          }
+        }
+        // If still no match but we have results, return the first one
+        if (results.length > 0) {
+          return {
+            korean_word: results[0].word,
+            korean_definitions: results[0].korean_definitions,
+            part_of_speech: results[0].part_of_speech,
+            target_code: results[0].target_code
+          };
+        }
       }
     } catch (error) {
       // Search failed
@@ -208,7 +254,7 @@ async function findKoreanMeaningForEnglishWord(englishWord) {
   return null;
 }
 
-// Get words from database (10 words, starting from last processed ID)
+// Get words from database (100 words, starting from last processed ID)
 async function getWordsFromDatabase(lastId = null) {
   let queryText;
   let params;
@@ -216,24 +262,24 @@ async function getWordsFromDatabase(lastId = null) {
   if (lastId) {
     queryText = `
       SELECT id, word, language 
-      FROM dictionary_multi 
+      FROM dictionary 
       WHERE language = 'english'
         AND (meaning_ko IS NULL OR meaning_ko = 'null'::jsonb)
         AND word IS NOT NULL
         AND id > $1
       ORDER BY id ASC
-      LIMIT 10
+      LIMIT 100
     `;
     params = [lastId];
   } else {
     queryText = `
       SELECT id, word, language 
-      FROM dictionary_multi 
+      FROM dictionary 
       WHERE language = 'english'
         AND (meaning_ko IS NULL OR meaning_ko = 'null'::jsonb)
         AND word IS NOT NULL
       ORDER BY id ASC
-      LIMIT 10
+      LIMIT 100
     `;
     params = [];
   }
